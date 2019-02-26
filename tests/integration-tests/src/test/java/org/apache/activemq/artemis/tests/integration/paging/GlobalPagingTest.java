@@ -23,6 +23,10 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
 import org.apache.activemq.artemis.api.config.ActiveMQDefaultConfiguration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+
+import junit.framework.AssertionFailedError;
 import org.apache.activemq.artemis.api.core.ActiveMQAddressFullException;
 import org.apache.activemq.artemis.api.core.ActiveMQBuffer;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
@@ -50,6 +54,7 @@ import org.apache.activemq.artemis.core.settings.impl.AddressSettings;
 import org.apache.activemq.artemis.tests.util.Wait;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.ComparisonFailure;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -213,6 +218,7 @@ public class GlobalPagingTest extends PagingTest {
       Configuration config = createDefaultInVMConfig().setJournalSyncNonTransactional(false);
 
       final ActiveMQServer server = createServer(true, config, PagingTest.PAGE_SIZE, -1);
+      CompletableFuture<Void> sizeCheckFuture = new CompletableFuture<>();
 
       try {
          final SimpleString managementAddress = server.getConfiguration().getManagementAddress();
@@ -254,16 +260,29 @@ public class GlobalPagingTest extends PagingTest {
 
             final long globalSize = pagingManager.getGlobalSize();
 
+
             final Thread globalSizeChecker = new Thread(() -> {
                startSendMessages.countDown();
-               while (!Thread.currentThread().isInterrupted()) {
-                  Assert.assertEquals(globalSize, pagingManager.getGlobalSize());
+               try
+               {
+                  while (!Thread.currentThread().isInterrupted()) {
+
+                     if (globalSize != pagingManager.getGlobalSize()) {
+
+                        sizeCheckFuture.completeExceptionally(new ComparisonFailure("Unexpected global size", String.valueOf(globalSize),
+                                                                                    String.valueOf(pagingManager.getGlobalSize())));
+                     }
+                  }
+               }
+               finally
+               {
+                  sizeCheckFuture.complete(null);
                }
             });
 
             globalSizeChecker.start();
 
-            try (ClientRequestor requestor = new ClientRequestor(session, managementAddress)) {
+            try (ClientRequestor requestor = new ClientRequestor(session, managementAddress, new SimpleString("anything.that.does.not.start.activemq.management"))) {
 
                ClientMessage message = session.createMessage(false);
 
@@ -286,6 +305,8 @@ public class GlobalPagingTest extends PagingTest {
             } finally {
                globalSizeChecker.interrupt();
             }
+
+            sizeCheckFuture.get();
          }
 
       } finally {

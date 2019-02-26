@@ -48,12 +48,16 @@ public final class ClientRequestor implements AutoCloseable {
     * @throws Exception
     */
    public ClientRequestor(final ClientSession session, final SimpleString requestAddress) throws Exception {
+      this(session, requestAddress, SimpleString.toSimpleString(requestAddress + "." + UUID.randomUUID().toString()));
+   }
+
+   public ClientRequestor(final ClientSession session, final SimpleString requestAddress, SimpleString replyQueue) throws Exception {
       queueSession = session;
 
       requestProducer = queueSession.createProducer(requestAddress);
-      replyQueue = new SimpleString(requestAddress + "." + UUID.randomUUID().toString());
-      queueSession.createQueue(new QueueConfiguration(replyQueue).setDurable(false).setTemporary(true));
-      replyConsumer = queueSession.createConsumer(replyQueue);
+      this.replyQueue = replyQueue;
+      queueSession.createQueue(new QueueConfiguration(this.replyQueue).setDurable(false).setTemporary(true));
+      replyConsumer = queueSession.createConsumer(this.replyQueue);
    }
 
    /**
