@@ -24,9 +24,7 @@ import java.util.concurrent.CountDownLatch;
 
 import org.apache.activemq.artemis.api.config.ActiveMQDefaultConfiguration;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 
-import junit.framework.AssertionFailedError;
 import org.apache.activemq.artemis.api.core.ActiveMQAddressFullException;
 import org.apache.activemq.artemis.api.core.ActiveMQBuffer;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
@@ -213,6 +211,15 @@ public class GlobalPagingTest extends PagingTest {
 
    @Test
    public void testManagementAddressCannotPageOrChangeGlobalSize() throws Exception {
+      doIt(true);
+   }
+
+   @Test
+   public void testManagementAddressCannotPageOrChangeGlobalSizeWithOtherReplyToQueue() throws Exception {
+      doIt(false);
+   }
+
+   private void doIt(boolean useDefaultReplyTo) throws Exception {
       clearDataRecreateServerDirs();
 
       Configuration config = createDefaultInVMConfig().setJournalSyncNonTransactional(false);
@@ -282,7 +289,7 @@ public class GlobalPagingTest extends PagingTest {
 
             globalSizeChecker.start();
 
-            try (ClientRequestor requestor = new ClientRequestor(session, managementAddress, new SimpleString("anything.that.does.not.start.activemq.management"))) {
+            try (ClientRequestor requestor = useDefaultReplyTo ? new ClientRequestor(session, managementAddress) :  new ClientRequestor(session, managementAddress, new SimpleString("anything.that.does.not.start.activemq.management"))) {
 
                ClientMessage message = session.createMessage(false);
 
